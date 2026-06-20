@@ -235,6 +235,12 @@ function App() {
     }
   };
 
+  const isSuccessAlert = authError && (
+    authError.toLowerCase().includes("successful") || 
+    authError.toLowerCase().includes("sent") || 
+    authError.toLowerCase().includes("generated")
+  );
+
   if (!token) {
     return (
       <div className="auth-page">
@@ -264,7 +270,7 @@ function App() {
                 </p>
 
                 {authError && (
-                  <div className={`auth-alert ${authError.includes("successful") || authError.includes("sent") ? "auth-alert-success" : "auth-alert-error"}`}>
+                  <div className={`auth-alert ${isSuccessAlert ? "auth-alert-success" : "auth-alert-error"}`}>
                     {authError}
                   </div>
                 )}
@@ -338,7 +344,7 @@ function App() {
                 <p className="auth-card-sub">{isLoginMode ? "Enter your credentials to continue" : "Fill in the details to get started"}</p>
 
                 {authError && (
-                  <div className={`auth-alert ${authError.includes("successful") ? "auth-alert-success" : "auth-alert-error"}`}>
+                  <div className={`auth-alert ${isSuccessAlert ? "auth-alert-success" : "auth-alert-error"}`}>
                     {authError}
                   </div>
                 )}
