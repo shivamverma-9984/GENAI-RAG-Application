@@ -9,6 +9,9 @@ import jwt
 import bcrypt
 from datetime import datetime, timedelta, timezone
 import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import base64
@@ -143,6 +146,58 @@ def login(user: LoginRequest):
     )
     return {"access_token": token, "token_type": "bearer", "username": username}
 
+def send_reset_email(to_email: str, token: str) -> bool:
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port_str = os.getenv("SMTP_PORT", "587")
+    
+    if not smtp_user or not smtp_pass:
+        print("Warning: SMTP_USER or SMTP_PASSWORD not configured. Skipping email send.")
+        return False
+        
+    try:
+        smtp_port = int(smtp_port_str)
+        # Create message container
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg['Subject'] = "Password Reset Verification Code - Insight AI"
+        
+        body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 0;">
+            <div style="max-width: 600px; margin: 20px auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <h2 style="color: #4f46e5; margin: 0; font-size: 1.5rem; font-weight: 700;">Insight AI</h2>
+                    <p style="font-size: 0.875rem; color: #64748b; margin: 4px 0 0 0;">Secure Password Reset</p>
+                </div>
+                <p>Hello,</p>
+                <p>We received a request to reset your password. Please use the 6-digit verification code below to proceed with resetting your password. This code will remain active for 15 minutes.</p>
+                <div style="text-align: center; margin: 32px 0;">
+                    <div style="display: inline-block; font-size: 28px; font-weight: 700; letter-spacing: 4px; color: #4f46e5; padding: 12px 30px; border: 2px dashed #e2e8f0; border-radius: 8px; background-color: #f8fafc; font-family: monospace;">{token}</div>
+                </div>
+                <p>If you did not make this request, you can safely ignore this email and your password will remain unchanged.</p>
+                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;" />
+                <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">This is an automated message. Please do not reply to this email.</p>
+            </div>
+        </body>
+        </html>
+        """
+        msg.attach(MIMEText(body, 'html'))
+        
+        # Connect to Gmail SMTP server using TLS
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, to_email, msg.as_string())
+        server.quit()
+        print(f"Password reset email sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
+
 @app.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest):
     table = get_users_table()
@@ -163,8 +218,19 @@ def forgot_password(req: ForgotPasswordRequest):
             ':expiry': expiry
         }
     )
-    # Returning the token in the response simulates sending it to the user's email
-    return {"message": "Verification code sent successfully", "token": token}
+    
+    # Try sending email
+    email_sent = send_reset_email(req.email, token)
+    
+    if email_sent:
+        return {"message": "Verification code sent to your email", "simulation": False}
+    else:
+        # Return the token in the response for simulation fallback
+        return {
+            "message": "Verification code generated (Simulation mode: SMTP not configured)",
+            "token": token,
+            "simulation": True
+        }
 
 @app.post("/reset-password")
 def reset_password(req: ResetPasswordRequest):

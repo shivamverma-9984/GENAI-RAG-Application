@@ -92,9 +92,13 @@ function App() {
     setSimulationCode("");
     try {
       const res = await axios.post(`${API_BASE_URL}/forgot-password`, { email: forgotEmail });
-      setSimulationCode(res.data.token);
+      if (res.data.token) {
+        setSimulationCode(res.data.token);
+        setAuthError("Verification code generated! (Simulation mode)");
+      } else {
+        setAuthError("Verification code sent to your email!");
+      }
       setForgotStep(2);
-      setAuthError("Verification code sent! (Simulated)");
     } catch (err) {
       setAuthError(err.response?.data?.detail || "Failed to send code");
     } finally {
