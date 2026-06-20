@@ -3,7 +3,9 @@ import axios from "axios";
 import { UploadCloud, File, Send, Loader2, Bot, LogOut, FileText, CheckCircle } from "lucide-react";
 import "./App.css";
 
-const API_BASE_URL = "https://genai-rag-application-y2zq.onrender.com";
+const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://localhost:8000"
+  : "https://genai-rag-application-y2zq.onrender.com";
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || null);
