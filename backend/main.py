@@ -113,18 +113,114 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+class VerifyEmailRequest(BaseModel):
+    email: str
+    code: str
+
+def send_verification_email(to_email: str, code: str) -> bool:
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASSWORD")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port_str = os.getenv("SMTP_PORT", "587")
+
+    if not smtp_user or not smtp_pass:
+        print("Warning: SMTP not configured. Skipping verification email.")
+        return False
+
+    try:
+        smtp_port = int(smtp_port_str)
+        msg = MIMEMultipart()
+        msg['From'] = smtp_user
+        msg['To'] = to_email
+        msg['Subject'] = "Email Verification Code - Insight AI"
+
+        body = (
+            "<html><body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333333;'>"
+            "<div style='max-width: 600px; margin: 20px auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>"
+            "<div style='text-align: center; margin-bottom: 24px;'>"
+            "<h2 style='color: #4f46e5; margin: 0; font-size: 1.5rem; font-weight: 700;'>Insight AI</h2>"
+            "<p style='font-size: 0.875rem; color: #64748b;'>Email Verification</p></div>"
+            "<p>Hello,</p>"
+            "<p>Thanks for signing up! Use the 6-digit code below to verify your email. This code expires in 15 minutes.</p>"
+            "<div style='text-align: center; margin: 32px 0;'>"
+            f"<div style='display: inline-block; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #4f46e5; padding: 16px 32px; border: 2px dashed #e2e8f0; border-radius: 8px; background-color: #f8fafc; font-family: monospace;'>{code}</div>"
+            "</div>"
+            "<p>If you did not create an account, you can safely ignore this email.</p>"
+            "<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;' />"
+            "<p style='font-size: 11px; color: #94a3b8; text-align: center;'>This is an automated message. Please do not reply.</p>"
+            "</div></body></html>"
+        )
+        msg.attach(MIMEText(body, 'html'))
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, to_email, msg.as_string())
+        server.quit()
+        print(f"Verification email sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"Error sending verification email: {e}")
+        return False
+
 @app.post("/register")
 def register(user: RegisterRequest):
     table = get_users_table()
 
-    # Check if email already exists (email is partition key)
     response = table.get_item(Key={'email': user.email})
     if 'Item' in response:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        existing = response['Item']
+        if existing.get('email_verified', False):
+            raise HTTPException(status_code=400, detail="Email already registered")
+        # Allow re-registration if not yet verified (resend code)
 
     hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    table.put_item(Item={'email': user.email, 'username': user.username, 'password': hashed_password})
-    return {"message": "User registered successfully"}
+    code = f"{secrets.randbelow(900000) + 100000}"
+    expiry = int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp())
+
+    table.put_item(Item={
+        'email': user.email,
+        'username': user.username,
+        'password': hashed_password,
+        'email_verified': False,
+        'verification_code': code,
+        'verification_code_expiry': expiry
+    })
+
+    email_sent = send_verification_email(user.email, code)
+
+    if email_sent:
+        return {"message": "Verification code sent to your email", "simulation": False}
+    else:
+        return {
+            "message": "Account created (Simulation mode: SMTP not configured)",
+            "code": code,
+            "simulation": True
+        }
+
+@app.post("/verify-email")
+def verify_email(req: VerifyEmailRequest):
+    table = get_users_table()
+    response = table.get_item(Key={'email': req.email})
+    if 'Item' not in response:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    item = response['Item']
+    stored_code = item.get('verification_code')
+    stored_expiry = item.get('verification_code_expiry')
+
+    if not stored_code or stored_code != req.code:
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    current_time = int(datetime.now(timezone.utc).timestamp())
+    if stored_expiry and current_time > int(stored_expiry):
+        raise HTTPException(status_code=400, detail="Verification code has expired")
+
+    table.update_item(
+        Key={'email': req.email},
+        UpdateExpression="SET email_verified = :v REMOVE verification_code, verification_code_expiry",
+        ExpressionAttributeValues={':v': True}
+    )
+    return {"message": "Email verified successfully"}
 
 @app.post("/login")
 def login(user: LoginRequest):
@@ -134,11 +230,15 @@ def login(user: LoginRequest):
     if 'Item' not in response:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
-    stored_password = response['Item']['password']
+    item = response['Item']
+    if not item.get('email_verified', False):
+        raise HTTPException(status_code=403, detail="Please verify your email before logging in")
+
+    stored_password = item['password']
     if not bcrypt.checkpw(user.password.encode('utf-8'), stored_password.encode('utf-8')):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
-    username = response['Item']['username']
+    username = item['username']
     token = jwt.encode(
         {"sub": user.email, "exp": datetime.now(timezone.utc) + timedelta(hours=24)},
         SECRET_KEY,
@@ -164,26 +264,22 @@ def send_reset_email(to_email: str, token: str) -> bool:
         msg['To'] = to_email
         msg['Subject'] = "Password Reset Verification Code - Insight AI"
         
-        body = f"""
-        <html>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 0;">
-            <div style="max-width: 600px; margin: 20px auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
-                <div style="text-align: center; margin-bottom: 24px;">
-                    <h2 style="color: #4f46e5; margin: 0; font-size: 1.5rem; font-weight: 700;">Insight AI</h2>
-                    <p style="font-size: 0.875rem; color: #64748b; margin: 4px 0 0 0;">Secure Password Reset</p>
-                </div>
-                <p>Hello,</p>
-                <p>We received a request to reset your password. Please use the 6-digit verification code below to proceed with resetting your password. This code will remain active for 15 minutes.</p>
-                <div style="text-align: center; margin: 32px 0;">
-                    <div style="display: inline-block; font-size: 28px; font-weight: 700; letter-spacing: 4px; color: #4f46e5; padding: 12px 30px; border: 2px dashed #e2e8f0; border-radius: 8px; background-color: #f8fafc; font-family: monospace;">{token}</div>
-                </div>
-                <p>If you did not make this request, you can safely ignore this email and your password will remain unchanged.</p>
-                <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;" />
-                <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">This is an automated message. Please do not reply to this email.</p>
-            </div>
-        </body>
-        </html>
-        """
+        body = (
+            "<html><body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333333;'>"
+            "<div style='max-width: 600px; margin: 20px auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>"
+            "<div style='text-align: center; margin-bottom: 24px;'>"
+            "<h2 style='color: #4f46e5; margin: 0; font-size: 1.5rem; font-weight: 700;'>Insight AI</h2>"
+            "<p style='font-size: 0.875rem; color: #64748b;'>Secure Password Reset</p></div>"
+            "<p>Hello,</p>"
+            "<p>We received a request to reset your password. Use the 6-digit code below to proceed. This code is valid for 15 minutes.</p>"
+            "<div style='text-align: center; margin: 32px 0;'>"
+            f"<div style='display: inline-block; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #4f46e5; padding: 16px 32px; border: 2px dashed #e2e8f0; border-radius: 8px; background-color: #f8fafc; font-family: monospace;'>{token}</div>"
+            "</div>"
+            "<p>If you did not make this request, you can safely ignore this email.</p>"
+            "<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;' />"
+            "<p style='font-size: 11px; color: #94a3b8; text-align: center;'>This is an automated message. Please do not reply.</p>"
+            "</div></body></html>"
+        )
         msg.attach(MIMEText(body, 'html'))
         
         # Connect to Gmail SMTP server using TLS
@@ -204,6 +300,9 @@ def forgot_password(req: ForgotPasswordRequest):
     response = table.get_item(Key={'email': req.email})
     if 'Item' not in response:
         raise HTTPException(status_code=404, detail="Email not registered")
+
+    if not response['Item'].get('email_verified', False):
+        raise HTTPException(status_code=403, detail="Please verify your email first before resetting password")
     
     # Generate 6-digit PIN/token
     token = f"{secrets.randbelow(900000) + 100000}"
@@ -225,9 +324,8 @@ def forgot_password(req: ForgotPasswordRequest):
     if email_sent:
         return {"message": "Verification code sent to your email", "simulation": False}
     else:
-        # Return the token in the response for simulation fallback
         return {
-            "message": "Verification code generated (Simulation mode: SMTP not configured)",
+            "message": "Reset code generated (Simulation mode: SMTP not configured)",
             "token": token,
             "simulation": True
         }
@@ -254,9 +352,10 @@ def reset_password(req: ResetPasswordRequest):
     
     table.update_item(
         Key={'email': req.email},
-        UpdateExpression="SET password = :p REMOVE reset_token, reset_token_expiry",
+        UpdateExpression="SET password = :p, email_verified = :v REMOVE reset_token, reset_token_expiry",
         ExpressionAttributeValues={
-            ':p': hashed_password
+            ':p': hashed_password,
+            ':v': True
         }
     )
     return {"message": "Password reset successfully"}
