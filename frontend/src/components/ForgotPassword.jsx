@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { getPasswordStrength } from "./LoginRegister";
 
 export default function ForgotPassword({
   forgotStep,
@@ -16,6 +17,7 @@ export default function ForgotPassword({
   onResetSubmit,
   onBack
 }) {
+  const strength = getPasswordStrength(newPassword);
   return (
     <>
       <h2 className="text-[1.75rem] font-bold text-text-primary tracking-[-0.5px] mb-1.5">
@@ -100,6 +102,51 @@ export default function ForgotPassword({
               onChange={(e) => setNewPassword(e.target.value)}
               className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none transition-all duration-250 ease-in-out placeholder:text-text-muted focus:border-primary focus:bg-primary/5 focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
             />
+            {newPassword && (
+              <div className="flex flex-col gap-2.5 mt-2.5 p-3.5 rounded-sm bg-[#090f1e]/80 border border-border-color transition-all duration-300">
+                <div className="flex justify-between items-center text-[0.72rem] font-bold">
+                  <span className="text-text-secondary uppercase tracking-[0.5px]">Password Strength: {strength.label}</span>
+                  <span style={{ color: strength.score === 5 ? "#34d399" : strength.score >= 4 ? "#60a5fa" : "#f87171" }}>
+                    {strength.score}/5
+                  </span>
+                </div>
+                
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden flex gap-1">
+                  {[1, 2, 3, 4, 5].map((index) => (
+                    <div 
+                      key={index} 
+                      className="h-full flex-1 transition-all duration-300 rounded-full"
+                      style={{ 
+                        backgroundColor: index <= strength.score ? strength.color : "rgba(255, 255, 255, 0.05)" 
+                      }}
+                    />
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mt-1 text-[0.7rem] font-semibold text-text-secondary">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full transition-all duration-250 ${strength.checks.length ? "bg-success" : "bg-text-muted"}`} />
+                    <span className={`transition-all duration-250 ${strength.checks.length ? "text-text-primary" : "text-text-muted"}`}>Min 8 characters</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full transition-all duration-250 ${strength.checks.uppercase ? "bg-success" : "bg-text-muted"}`} />
+                    <span className={`transition-all duration-250 ${strength.checks.uppercase ? "text-text-primary" : "text-text-muted"}`}>Uppercase letter</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full transition-all duration-250 ${strength.checks.lowercase ? "bg-success" : "bg-text-muted"}`} />
+                    <span className={`transition-all duration-250 ${strength.checks.lowercase ? "text-text-primary" : "text-text-muted"}`}>Lowercase letter</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`w-1.5 h-1.5 rounded-full transition-all duration-250 ${strength.checks.number ? "bg-success" : "bg-text-muted"}`} />
+                    <span className={`transition-all duration-250 ${strength.checks.number ? "text-text-primary" : "text-text-muted"}`}>One number</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 col-span-2">
+                    <span className={`w-1.5 h-1.5 rounded-full transition-all duration-250 ${strength.checks.special ? "bg-success" : "bg-text-muted"}`} />
+                    <span className={`transition-all duration-250 ${strength.checks.special ? "text-text-primary" : "text-text-muted"}`}>Special character (e.g. @$!%*?)</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <button
             type="submit"

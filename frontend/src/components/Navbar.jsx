@@ -9,7 +9,7 @@ export default function Navbar({ token }) {
     <>
       {/* Home Navbar */}
       <header className="fixed top-0 left-0 right-0 h-[72px] bg-bg-primary/70 backdrop-blur-md border-b border-border-color z-[1100] flex items-center transition-all duration-250 ease-in-out">
-        <div className="w-full max-w-[1200px] mx-auto px-6 flex items-center justify-between">
+        <div className="w-full max-w-[1200px] mx-auto px-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 cursor-pointer no-underline" onClick={() => setMobileMenuOpen(false)}>
             <div className="w-8 h-8 rounded-xs bg-gradient-to-br from-primary to-accent-blue flex items-center justify-center text-white shadow-[0_0_12px_rgba(79,70,229,0.2)] shrink-0">
               <Bot size={18} />

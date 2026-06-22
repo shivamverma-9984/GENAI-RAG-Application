@@ -67,6 +67,26 @@ export const selectFile = createAsyncThunk(
   }
 );
 
+export const deleteFile = createAsyncThunk(
+  "files/deleteFile",
+  async (filename, { getState, dispatch, rejectWithValue }) => {
+    const { auth } = getState();
+    if (!auth.token) return rejectWithValue("No auth token available");
+    try {
+      await axios.delete(`${API_BASE_URL}/files/${encodeURIComponent(filename)}`, {
+        headers: { Authorization: `Bearer ${auth.token}` }
+      });
+      dispatch(showToast({ message: `Successfully deleted "${filename}"`, type: "success" }));
+      dispatch(fetchUserFiles());
+      return filename;
+    } catch (err) {
+      const errMsg = err.response?.data?.detail || "Delete failed.";
+      dispatch(showToast({ message: errMsg, type: "error" }));
+      return rejectWithValue(errMsg);
+    }
+  }
+);
+
 const filesSlice = createSlice({
   name: "files",
   initialState: {
@@ -130,6 +150,19 @@ const filesSlice = createSlice({
       })
       .addCase(selectFile.rejected, (state) => {
         state.fileLoading = false;
+      })
+      // deleteFile
+      .addCase(deleteFile.pending, (state) => {
+        state.filesLoading = true;
+      })
+      .addCase(deleteFile.fulfilled, (state, action) => {
+        state.filesLoading = false;
+        if (state.activeFile === action.payload) {
+          state.activeFile = null;
+        }
+      })
+      .addCase(deleteFile.rejected, (state) => {
+        state.filesLoading = false;
       });
   }
 });

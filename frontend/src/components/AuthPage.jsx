@@ -2,7 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Bot } from "lucide-react";
-import LoginRegister from "./LoginRegister";
+import LoginRegister, { getPasswordStrength } from "./LoginRegister";
 import ForgotPassword from "./ForgotPassword";
 import VerifyEmail from "./VerifyEmail";
 
@@ -25,6 +25,8 @@ function AuthPage({ onLoginSuccess, mode }) {
   const [authForm, setAuthForm] = useState({ username: "", email: "", password: "" });
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [showVerifyLink, setShowVerifyLink] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
 
   const [forgotStep, setForgotStep] = useState(1);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -45,6 +47,17 @@ function AuthPage({ onLoginSuccess, mode }) {
   const handleAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError("");
+    setShowVerifyLink(false);
+    setUnverifiedEmail("");
+
+    if (!isLoginMode) {
+      const { score } = getPasswordStrength(authForm.password);
+      if (score < 5) {
+        setAuthError("Password must meet all strength requirements.");
+        return;
+      }
+    }
+
     setAuthLoading(true);
     try {
       const endpoint = isLoginMode ? "/login" : "/register";
@@ -65,7 +78,31 @@ function AuthPage({ onLoginSuccess, mode }) {
         });
       }
     } catch (err) {
-      setAuthError(err.response?.data?.detail || "Authentication failed");
+      const errMsg = err.response?.data?.detail || "Authentication failed";
+      setAuthError(errMsg);
+      if (isLoginMode && err.response?.status === 403 && errMsg.toLowerCase().includes("verify your email")) {
+        setShowVerifyLink(true);
+        setUnverifiedEmail(authForm.email);
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleVerifyLinkClick = async () => {
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/resend-verification`, { email: unverifiedEmail });
+      showToastFromContext("Verification code sent to your email!", "success");
+      navigate("/verify-email", { 
+        state: { 
+          email: unverifiedEmail, 
+          simCode: res.data.code || "" 
+        } 
+      });
+    } catch (err) {
+      setAuthError(err.response?.data?.detail || "Failed to resend verification code");
     } finally {
       setAuthLoading(false);
     }
@@ -113,6 +150,13 @@ function AuthPage({ onLoginSuccess, mode }) {
   const handleResetSubmit = async (e) => {
     e.preventDefault();
     setAuthError("");
+
+    const { score } = getPasswordStrength(newPassword);
+    if (score < 5) {
+      setAuthError("Password must meet all strength requirements.");
+      return;
+    }
+
     setAuthLoading(true);
     try {
       await axios.post(`${API_BASE_URL}/reset-password`, {
@@ -219,6 +263,8 @@ function AuthPage({ onLoginSuccess, mode }) {
               authLoading={authLoading}
               onSubmit={handleAuthSubmit}
               onForgotClick={() => navigate("/forgot-password")}
+              showVerifyLink={showVerifyLink}
+              onVerifyClick={handleVerifyLinkClick}
             />
           )}
         </div>

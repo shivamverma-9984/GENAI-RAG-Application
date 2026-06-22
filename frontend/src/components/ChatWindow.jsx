@@ -104,12 +104,12 @@ function ChatWindow({
           />
         </div>
         <button 
-          className="w-[52px] h-[52px] rounded-md border-none bg-gradient-to-r from-primary to-accent-blue text-white flex items-center justify-center cursor-pointer shrink-0 transition-all duration-250 ease-in-out shadow-[0_4px_12px_rgba(79,70,229,0.2)] hover:opacity-95 hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(79,70,229,0.3)] active:translate-y-0 disabled:bg-bg-tertiary disabled:text-text-muted disabled:cursor-not-allowed disabled:shadow-none disabled:opacity-50" 
+          className="w-[52px] h-[52px] rounded-md border-none bg-gradient-to-r from-primary to-accent-blue text-white flex items-center justify-center cursor-pointer shrink-0 transition-all duration-250 ease-in-out shadow-[0_4px_12px_rgba(79,70,229,0.2)] hover:opacity-95 hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(79,70,229,0.3)] active:translate-y-0 disabled:bg-bg-tertiary disabled:text-text-muted disabled:cursor-not-allowed disabled:shadow-none " 
           onClick={onSendMessage} 
           disabled={!inputMessage.trim() || isTyping}
           aria-label="Send message"
         >
-          <Send size={18} />
+          <Send  className="text-white" size={18} />
         </button>
       </div>
     </main>

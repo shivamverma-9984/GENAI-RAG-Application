@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { UploadCloud, File, Loader2, Bot, LogOut, FileText, CheckCircle, X } from "lucide-react";
+import { UploadCloud, File, Loader2, Bot, LogOut, FileText, CheckCircle, X, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 function Sidebar({
   username,
@@ -11,13 +12,14 @@ function Sidebar({
   onFileChange,
   onUpload,
   onSelectFile,
+  onDeleteFile,
   onLogout,
   isOpenMobile,
   onCloseMobile,
   filesLoading
 }) {
   const [isDragActive, setIsDragActive] = useState(false);
-
+  const navigate=useNavigate();
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -44,11 +46,11 @@ function Sidebar({
       isOpenMobile ? "max-lg:translate-x-0" : ""
     }`}>
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xs bg-gradient-to-br from-primary to-accent-blue flex items-center justify-center text-white shadow-[0_0_12px_rgba(79,70,229,0.2)] shrink-0">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={()=>navigate("/")}>
+          <div className=" w-8 h-8 rounded-xs bg-gradient-to-br from-primary to-accent-blue flex items-center justify-center text-white shadow-[0_0_12px_rgba(79,70,229,0.2)] shrink-0">
             <Bot size={18} />
           </div>
-          <span className="text-[1.15rem] font-extrabold text-text-primary tracking-[-0.5px]">Insight AI</span>
+          <span className="text-[1.15rem] font-extrabold text-text-primary tracking-[-0.5px] cursor-pointer" >Insight AI</span>
         </div>
         <button 
           className="hidden max-lg:flex items-center justify-center bg-transparent border-none text-text-secondary cursor-pointer p-1 rounded-full transition-all duration-120 hover:bg-white/5 hover:text-text-primary" 
@@ -65,7 +67,7 @@ function Sidebar({
         </div>
         <div className="flex flex-col overflow-hidden">
           <div className="text-sm font-semibold text-text-primary truncate">{username}</div>
-          <div className="text-[0.72rem] font-medium text-text-secondary opacity-70">Pro User</div>
+          {/* <div className="text-[0.72rem] font-medium text-text-secondary opacity-70">Pro User</div> */}
         </div>
       </div>
 
@@ -104,7 +106,7 @@ function Sidebar({
       />
 
       <button 
-        className="flex items-center justify-center gap-2 p-3 rounded-xs border-none bg-gradient-to-r from-primary to-accent-blue text-white text-sm font-semibold cursor-pointer transition-all duration-250 ease-in-out shadow-[0_4px_12px_rgba(79,70,229,0.15)] mt-1 hover:not-disabled:opacity-95 hover:not-disabled:-translate-y-0.5 hover:not-disabled:shadow-[0_6px_16px_rgba(79,70,229,0.25)] active:not-disabled:translate-y-0 disabled:bg-bg-tertiary disabled:text-text-muted disabled:cursor-not-allowed disabled:shadow-none disabled:opacity-50" 
+        className="flex items-center justify-center gap-2 p-3 rounded-xs bg-gradient-to-r from-primary to-accent-blue text-white cursor-pointer transition-all duration-250 ease-in-out shadow-[0_4px_12px_rgba(79,70,229,0.15)]" 
         onClick={onUpload} 
         disabled={!file || isUploading}
       >
@@ -147,7 +149,7 @@ function Sidebar({
           userFiles.map((f) => (
             <div
               key={f.key}
-              className={`flex items-center gap-2.5 p-[10px_12px] rounded-sm cursor-pointer text-[0.82rem] border transition-all duration-120 hover:bg-white/3 hover:text-text-primary ${
+              className={`group flex items-center justify-between p-[10px_12px] rounded-sm cursor-pointer text-[0.82rem] border transition-all duration-120 hover:bg-white/3 hover:text-text-primary ${
                 activeFile === f.filename 
                   ? "bg-primary-light border-primary/25 text-accent-blue font-semibold"
                   : "text-text-secondary border-transparent"
@@ -157,11 +159,28 @@ function Sidebar({
                 if (onCloseMobile) onCloseMobile();
               }}
             >
-              <FileText size={15} className="shrink-0" />
-              <span className="truncate">{f.filename}</span>
-              {activeFile === f.filename && (
-                <CheckCircle size={14} className="text-accent-blue shrink-0" />
-              )}
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <FileText size={15} className="shrink-0" />
+                <span className="truncate">{f.filename}</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {activeFile === f.filename && (
+                  <CheckCircle size={14} className="text-accent-blue shrink-0" />
+                )}
+                <button
+                  type="button"
+                  className="p-1 rounded-full text-text-secondary hover:text-error-text hover:bg-error-light opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all duration-150 border-none bg-transparent cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Are you sure you want to delete "${f.filename}"?`)) {
+                      onDeleteFile(f.filename);
+                    }
+                  }}
+                  title="Delete document"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
             </div>
           ))
         )}

@@ -10,7 +10,7 @@ import ToastContainer from "./components/Toast";
 
 import { loginSuccess, logout } from "./store/slices/authSlice";
 import { showToast, dismissToast, setIsOpenMobile } from "./store/slices/uiSlice";
-import { fetchUserFiles, uploadFile, selectFile, clearFilesState } from "./store/slices/filesSlice";
+import { fetchUserFiles, uploadFile, selectFile, clearFilesState, deleteFile } from "./store/slices/filesSlice";
 import { setInputMessage, clearChatState, addLocalUserMessage, sendMessage } from "./store/slices/chatSlice";
 
 const ACCEPTED_EXTENSIONS = [".pdf", ".docx", ".pptx", ".txt", ".csv", ".xlsx", ".png", ".jpg", ".jpeg", ".webp"];
@@ -85,6 +85,16 @@ function AppRoutes() {
     dispatch(selectFile(filename));
   };
 
+  const handleDeleteFile = (filename) => {
+    dispatch(deleteFile(filename)).then((actionResult) => {
+      if (deleteFile.fulfilled.match(actionResult)) {
+        if (activeFile === filename) {
+          dispatch(clearChatState());
+        }
+      }
+    });
+  };
+
   const handleSendMessage = () => {
     if (!inputMessage.trim()) return;
     const userMsg = inputMessage;
@@ -157,6 +167,7 @@ function AppRoutes() {
                   onFileChange={handleFileChange}
                   onUpload={handleUpload}
                   onSelectFile={handleSelectFile}
+                  onDeleteFile={handleDeleteFile}
                   onLogout={handleLogout}
                   isOpenMobile={isOpenMobile}
                   onCloseMobile={() => dispatch(setIsOpenMobile(false))}

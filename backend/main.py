@@ -15,8 +15,21 @@ from email.mime.multipart import MIMEMultipart
 from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import base64
+import re
 
 from dotenv import load_dotenv
+
+def validate_password(password: str):
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long.")
+    if not re.search(r"[A-Z]", password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter.")
+    if not re.search(r"[a-z]", password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one lowercase letter.")
+    if not re.search(r"[0-9]", password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one number.")
+    if not re.search(r"[^A-Za-z0-9]", password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one special character.")
 
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, CSVLoader
 from langchain_core.documents import Document
@@ -117,6 +130,9 @@ class VerifyEmailRequest(BaseModel):
     email: str
     code: str
 
+class ResendVerificationRequest(BaseModel):
+    email: str
+
 def send_verification_email(to_email: str, code: str) -> bool:
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASSWORD")
@@ -164,6 +180,7 @@ def send_verification_email(to_email: str, code: str) -> bool:
 
 @app.post("/register")
 def register(user: RegisterRequest):
+    validate_password(user.password)
     table = get_users_table()
 
     response = table.get_item(Key={'email': user.email})
@@ -221,6 +238,37 @@ def verify_email(req: VerifyEmailRequest):
         ExpressionAttributeValues={':v': True}
     )
     return {"message": "Email verified successfully"}
+
+@app.post("/resend-verification")
+def resend_verification(req: ResendVerificationRequest):
+    table = get_users_table()
+    response = table.get_item(Key={'email': req.email})
+    if 'Item' not in response:
+        raise HTTPException(status_code=404, detail="Email not found")
+        
+    item = response['Item']
+    if item.get('email_verified', False):
+        raise HTTPException(status_code=400, detail="Email is already verified")
+        
+    # Generate new verification code
+    code = f"{secrets.randbelow(900000) + 100000}"
+    expiry = int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp())
+    
+    table.update_item(
+        Key={'email': req.email},
+        UpdateExpression="SET verification_code = :c, verification_code_expiry = :e",
+        ExpressionAttributeValues={':c': code, ':e': expiry}
+    )
+    
+    email_sent = send_verification_email(req.email, code)
+    if email_sent:
+        return {"message": "Verification code resent successfully", "simulation": False}
+    else:
+        return {
+            "message": "Verification code generated (Simulation mode: SMTP not configured)",
+            "code": code,
+            "simulation": True
+        }
 
 @app.post("/login")
 def login(user: LoginRequest):
@@ -332,6 +380,7 @@ def forgot_password(req: ForgotPasswordRequest):
 
 @app.post("/reset-password")
 def reset_password(req: ResetPasswordRequest):
+    validate_password(req.new_password)
     table = get_users_table()
     response = table.get_item(Key={'email': req.email})
     if 'Item' not in response:
@@ -452,6 +501,32 @@ def list_files(current_user: str = Depends(get_current_user)):
         return {"files": files}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
+
+@app.delete("/files/{filename}")
+def delete_file(filename: str, current_user: str = Depends(get_current_user)):
+    if not S3_BUCKET:
+        raise HTTPException(status_code=500, detail="S3 bucket not configured.")
+    try:
+        s3_key = f"{current_user}/{filename}"
+        
+        # Verify if the file exists in S3 before attempting delete
+        try:
+            s3.head_object(Bucket=S3_BUCKET, Key=s3_key)
+        except Exception:
+            raise HTTPException(status_code=404, detail="File not found")
+            
+        s3.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+        
+        # If deleted file was the active file, clear active file and vector store
+        if app.state.active_file == filename:
+            app.state.active_file = None
+            app.state.vector_store = None
+            
+        return {"message": f"File {filename} deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting file: {str(e)}")
 
 class SelectFileRequest(BaseModel):
     filename: str
