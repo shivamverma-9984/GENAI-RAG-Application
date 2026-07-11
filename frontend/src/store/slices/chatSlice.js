@@ -5,7 +5,7 @@ import { selectFile, uploadFile } from "./filesSlice";
 
 const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
   ? "http://localhost:8000"
-  : "https://genaiapp-nine.vercel.app/";
+  : "https://genai-rag-application-4aag.vercel.app";
 
 const initialBotMessage = { type: "bot", text: "Hello! Please upload a file to get started. Supported: PDF, DOCX, PPTX, XLSX, CSV, TXT, and Images." };
 
