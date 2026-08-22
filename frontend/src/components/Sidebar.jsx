@@ -10,15 +10,16 @@ function Sidebar({
   userFiles,
   activeFile,
   onFileChange,
-  onUpload,
   onSelectFile,
   onDeleteFile,
   onLogout,
   isOpenMobile,
   onCloseMobile,
   filesLoading
-}) {
+}
+) {
   const [isDragActive, setIsDragActive] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState(null);
   const navigate=useNavigate();
   const handleDrag = (e) => {
     e.preventDefault();
@@ -86,14 +87,14 @@ function Sidebar({
         onDrop={handleDrop}
       >
         <div className="w-9 h-9 rounded-xs bg-primary/10 flex items-center justify-center text-accent-blue shrink-0 transition-all duration-120 group-hover:bg-primary-light group-hover:text-text-primary">
-          {file ? <File size={20} /> : <UploadCloud size={20} />}
+          {isUploading ? <Loader2 className="animate-spin-custom" size={20} /> : (file ? <File size={20} /> : <UploadCloud size={20} />)}
         </div>
         <div className="flex flex-col gap-[3px] overflow-hidden flex-1">
           <span className="text-[0.82rem] font-semibold text-text-primary truncate">
-            {file ? file.name : "Upload File"}
+            {isUploading ? "Uploading..." : (file ? file.name : "Upload File")}
           </span>
           <small className="text-[0.7rem] text-text-secondary">
-            {file ? "Ready to process" : "Drag & drop or click"}
+            {isUploading ? "Processing your document..." : "Drag & drop or click"}
           </small>
         </div>
       </label>
@@ -105,20 +106,7 @@ function Sidebar({
         style={{ display: "none" }}
       />
 
-      <button 
-        className="flex items-center justify-center gap-2 p-3 rounded-xs bg-gradient-to-r from-primary to-accent-blue text-white cursor-pointer transition-all duration-250 ease-in-out shadow-[0_4px_12px_rgba(79,70,229,0.15)]" 
-        onClick={onUpload} 
-        disabled={!file || isUploading}
-      >
-        {isUploading ? (
-          <>
-            <Loader2 className="animate-spin-custom" size={16} /> 
-            Processing…
-          </>
-        ) : (
-          "Process Document"
-        )}
-      </button>
+
 
       {uploadStatus.message && (
         <div className={`p-[10px_14px] rounded-xs text-[0.78rem] font-medium text-center mt-1 border-l-3 leading-normal border ${
@@ -169,12 +157,10 @@ function Sidebar({
                 )}
                 <button
                   type="button"
-                  className="p-1 rounded-full text-text-secondary hover:text-error-text hover:bg-error-light opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all duration-150 border-none bg-transparent cursor-pointer"
+                  className="p-1 rounded-full text-text-secondary hover:text-red-400 cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (window.confirm(`Are you sure you want to delete "${f.filename}"?`)) {
-                      onDeleteFile(f.filename);
-                    }
+                    setFileToDelete(f.filename);
                   }}
                   title="Delete document"
                 >
@@ -195,6 +181,31 @@ function Sidebar({
           Sign out
         </button>
       </div>
+
+      {fileToDelete && (
+        <div className="absolute bottom-4 left-4 right-4 bg-bg-card border border-error/30 shadow-[0_8px_30px_rgba(0,0,0,0.5)] rounded-md p-4 z-50 animate-toast-slide-in backdrop-blur-xl">
+          <p className="text-sm font-medium text-text-primary mb-3 leading-snug">
+            Are you sure you want to delete "{fileToDelete}"?
+          </p>
+          <div className="flex justify-end gap-2">
+            <button 
+              className="px-3 py-1.5 text-xs font-semibold rounded-sm border border-border-color bg-transparent text-text-secondary hover:text-text-primary hover:bg-white/5 cursor-pointer transition-colors"
+              onClick={() => setFileToDelete(null)}
+            >
+              Cancel
+            </button>
+            <button 
+              className="px-3 py-1.5 text-xs font-semibold rounded-sm border-none bg-error/90 text-white hover:bg-error cursor-pointer shadow-sm transition-colors"
+              onClick={() => {
+                onDeleteFile(fileToDelete);
+                setFileToDelete(null);
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

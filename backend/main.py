@@ -4,7 +4,11 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import tempfile
-import boto3
+from pymongo import MongoClient
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+import requests
 import jwt
 import bcrypt
 from datetime import datetime, timedelta, timezone
@@ -58,16 +62,29 @@ app.add_middleware(
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
 
-# DynamoDB setup
-dynamodb = boto3.resource('dynamodb', region_name=os.getenv("AWS_REGION", "us-east-1"))
-USERS_TABLE_NAME = os.getenv("DYNAMODB_TABLE", "ChatBot_User")
+# MongoDB setup
+MONGO_URI = os.getenv("MONGODB_URI")
+MONGO_DB = os.getenv("MONGODB_DB_NAME")
+MONGO_COLLECTION = os.getenv("MONGODB_COLLECTION_NAME")
 
-def get_users_table():
-    return dynamodb.Table(USERS_TABLE_NAME)
+db = None
+try:
+    mongo_client = MongoClient(MONGO_URI)
+    db = mongo_client[MONGO_DB]
+except Exception as e:
+    print(f"MongoDB connection error: {e}")
 
-# S3 setup
-s3 = boto3.client('s3', region_name=os.getenv("AWS_REGION", "us-east-1"))
-S3_BUCKET = os.getenv("S3_BUCKET_NAME", "")
+def get_users_collection():
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database connection not initialized. Please check MongoDB configuration.")
+    return db[MONGO_COLLECTION]
+
+# Cloudinary setup
+cloudinary.config( 
+    cloud_name = os.getenv("CLOUDINARY_CLOUD_NAME", ""), 
+    api_key = os.getenv("CLOUDINARY_API_KEY", ""), 
+    api_secret = os.getenv("CLOUDINARY_API_SECRET", "") 
+)
 
 security = HTTPBearer()
 
@@ -181,11 +198,10 @@ def send_verification_email(to_email: str, code: str) -> bool:
 @app.post("/register")
 def register(user: RegisterRequest):
     validate_password(user.password)
-    table = get_users_table()
+    collection = get_users_collection()
 
-    response = table.get_item(Key={'email': user.email})
-    if 'Item' in response:
-        existing = response['Item']
+    existing = collection.find_one({'email': user.email})
+    if existing:
         if existing.get('email_verified', False):
             raise HTTPException(status_code=400, detail="Email already registered")
         # Allow re-registration if not yet verified (resend code)
@@ -194,14 +210,18 @@ def register(user: RegisterRequest):
     code = f"{secrets.randbelow(900000) + 100000}"
     expiry = int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp())
 
-    table.put_item(Item={
-        'email': user.email,
-        'username': user.username,
-        'password': hashed_password,
-        'email_verified': False,
-        'verification_code': code,
-        'verification_code_expiry': expiry
-    })
+    collection.update_one(
+        {'email': user.email},
+        {'$set': {
+            'email': user.email,
+            'username': user.username,
+            'password': hashed_password,
+            'email_verified': False,
+            'verification_code': code,
+            'verification_code_expiry': expiry
+        }},
+        upsert=True
+    )
 
     email_sent = send_verification_email(user.email, code)
 
@@ -216,12 +236,11 @@ def register(user: RegisterRequest):
 
 @app.post("/verify-email")
 def verify_email(req: VerifyEmailRequest):
-    table = get_users_table()
-    response = table.get_item(Key={'email': req.email})
-    if 'Item' not in response:
+    collection = get_users_collection()
+    item = collection.find_one({'email': req.email})
+    if not item:
         raise HTTPException(status_code=404, detail="Email not found")
 
-    item = response['Item']
     stored_code = item.get('verification_code')
     stored_expiry = item.get('verification_code_expiry')
 
@@ -232,21 +251,22 @@ def verify_email(req: VerifyEmailRequest):
     if stored_expiry and current_time > int(stored_expiry):
         raise HTTPException(status_code=400, detail="Verification code has expired")
 
-    table.update_item(
-        Key={'email': req.email},
-        UpdateExpression="SET email_verified = :v REMOVE verification_code, verification_code_expiry",
-        ExpressionAttributeValues={':v': True}
+    collection.update_one(
+        {'email': req.email},
+        {
+            '$set': {'email_verified': True},
+            '$unset': {'verification_code': "", 'verification_code_expiry': ""}
+        }
     )
     return {"message": "Email verified successfully"}
 
 @app.post("/resend-verification")
 def resend_verification(req: ResendVerificationRequest):
-    table = get_users_table()
-    response = table.get_item(Key={'email': req.email})
-    if 'Item' not in response:
+    collection = get_users_collection()
+    item = collection.find_one({'email': req.email})
+    if not item:
         raise HTTPException(status_code=404, detail="Email not found")
         
-    item = response['Item']
     if item.get('email_verified', False):
         raise HTTPException(status_code=400, detail="Email is already verified")
         
@@ -254,10 +274,9 @@ def resend_verification(req: ResendVerificationRequest):
     code = f"{secrets.randbelow(900000) + 100000}"
     expiry = int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp())
     
-    table.update_item(
-        Key={'email': req.email},
-        UpdateExpression="SET verification_code = :c, verification_code_expiry = :e",
-        ExpressionAttributeValues={':c': code, ':e': expiry}
+    collection.update_one(
+        {'email': req.email},
+        {'$set': {'verification_code': code, 'verification_code_expiry': expiry}}
     )
     
     email_sent = send_verification_email(req.email, code)
@@ -272,13 +291,12 @@ def resend_verification(req: ResendVerificationRequest):
 
 @app.post("/login")
 def login(user: LoginRequest):
-    table = get_users_table()
-    response = table.get_item(Key={'email': user.email})
+    collection = get_users_collection()
+    item = collection.find_one({'email': user.email})
 
-    if 'Item' not in response:
+    if not item:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
-    item = response['Item']
     if not item.get('email_verified', False):
         raise HTTPException(status_code=403, detail="Please verify your email before logging in")
 
@@ -317,15 +335,15 @@ def send_reset_email(to_email: str, token: str) -> bool:
             "<div style='max-width: 600px; margin: 20px auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>"
             "<div style='text-align: center; margin-bottom: 24px;'>"
             "<h2 style='color: #4f46e5; margin: 0; font-size: 1.5rem; font-weight: 700;'>Insight AI</h2>"
-            "<p style='font-size: 0.875rem; color: #64748b;'>Secure Password Reset</p></div>"
+            "<p style='font-size: 0.875rem; color: #64748b;'>Reset Password</p></div>"
             "<p>Hello,</p>"
-            "<p>We received a request to reset your password. Use the 6-digit code below to proceed. This code is valid for 15 minutes.</p>"
+            "<p>Use the 6-digit code below to reset your password. This code is valid for 15 minutes.</p>"
             "<div style='text-align: center; margin: 32px 0;'>"
             f"<div style='display: inline-block; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #4f46e5; padding: 16px 32px; border: 2px dashed #e2e8f0; border-radius: 8px; background-color: #f8fafc; font-family: monospace;'>{token}</div>"
             "</div>"
             "<p>If you did not make this request, you can safely ignore this email.</p>"
             "<hr style='border: 0; border-top: 1px solid #e2e8f0; margin: 28px 0;' />"
-            "<p style='font-size: 11px; color: #94a3b8; text-align: center;'>This is an automated message. Please do not reply.</p>"
+            "<p style='font-size: 11px; color: #94a3b8; text-align: center;'>This is an auto-generated email, Please do not reply to this email.</p>"
             "</div></body></html>"
         )
         msg.attach(MIMEText(body, 'html'))
@@ -344,12 +362,12 @@ def send_reset_email(to_email: str, token: str) -> bool:
 
 @app.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest):
-    table = get_users_table()
-    response = table.get_item(Key={'email': req.email})
-    if 'Item' not in response:
+    collection = get_users_collection()
+    item = collection.find_one({'email': req.email})
+    if not item:
         raise HTTPException(status_code=404, detail="Email not registered")
 
-    if not response['Item'].get('email_verified', False):
+    if not item.get('email_verified', False):
         raise HTTPException(status_code=403, detail="Please verify your email first before resetting password")
     
     # Generate 6-digit PIN/token
@@ -357,13 +375,9 @@ def forgot_password(req: ForgotPasswordRequest):
     # Expire in 15 minutes
     expiry = int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp())
     
-    table.update_item(
-        Key={'email': req.email},
-        UpdateExpression="SET reset_token = :token, reset_token_expiry = :expiry",
-        ExpressionAttributeValues={
-            ':token': token,
-            ':expiry': expiry
-        }
+    collection.update_one(
+        {'email': req.email},
+        {'$set': {'reset_token': token, 'reset_token_expiry': expiry}}
     )
     
     # Try sending email
@@ -381,12 +395,11 @@ def forgot_password(req: ForgotPasswordRequest):
 @app.post("/reset-password")
 def reset_password(req: ResetPasswordRequest):
     validate_password(req.new_password)
-    table = get_users_table()
-    response = table.get_item(Key={'email': req.email})
-    if 'Item' not in response:
+    collection = get_users_collection()
+    item = collection.find_one({'email': req.email})
+    if not item:
         raise HTTPException(status_code=404, detail="Email not registered")
     
-    item = response['Item']
     stored_token = item.get('reset_token')
     stored_expiry = item.get('reset_token_expiry')
     
@@ -399,12 +412,11 @@ def reset_password(req: ResetPasswordRequest):
         
     hashed_password = bcrypt.hashpw(req.new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
-    table.update_item(
-        Key={'email': req.email},
-        UpdateExpression="SET password = :p, email_verified = :v REMOVE reset_token, reset_token_expiry",
-        ExpressionAttributeValues={
-            ':p': hashed_password,
-            ':v': True
+    collection.update_one(
+        {'email': req.email},
+        {
+            '$set': {'password': hashed_password, 'email_verified': True},
+            '$unset': {'reset_token': "", 'reset_token_expiry': ""}
         }
     )
     return {"message": "Password reset successfully"}
@@ -466,16 +478,24 @@ async def upload_file(file: UploadFile = File(...), current_user: str = Depends(
         raise HTTPException(status_code=400, detail=f"Unsupported file type. Allowed: {', '.join(SUPPORTED_EXTENSIONS)}")
     if embeddings is None or llm is None:
         raise HTTPException(status_code=500, detail="Gemini clients not initialized properly.")
-    if not S3_BUCKET:
-        raise HTTPException(status_code=500, detail="S3 bucket not configured.")
+    
     try:
         content = await file.read()
-        s3_key = f"{current_user}/{file.filename}"
-        s3.put_object(Bucket=S3_BUCKET, Key=s3_key, Body=content)
-
+        
+        # Determine resource_type based on extension for Cloudinary
+        res_type = "image" if ext in IMAGE_EXTENSIONS else "raw"
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
             tmp_file.write(content)
             tmp_file_path = tmp_file.name
+
+        public_id = f"InsightAIFiles/{current_user}/{file.filename}"
+        upload_result = cloudinary.uploader.upload(
+            tmp_file_path,
+            resource_type=res_type,
+            public_id=public_id,
+            overwrite=True
+        )
 
         chunks = process_file_to_vectorstore(tmp_file_path, file.filename)
         os.remove(tmp_file_path)
@@ -487,36 +507,44 @@ async def upload_file(file: UploadFile = File(...), current_user: str = Depends(
 
 @app.get("/files")
 def list_files(current_user: str = Depends(get_current_user)):
-    if not S3_BUCKET:
-        raise HTTPException(status_code=500, detail="S3 bucket not configured.")
     try:
-        prefix = f"{current_user}/"
-        response = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
+        prefix = f"InsightAIFiles/{current_user}/"
         files = []
-        for obj in response.get("Contents", []):
-            key = obj["Key"]
-            filename = key[len(prefix):]
+        
+        # Get raw files
+        raw_response = cloudinary.api.resources(type="upload", resource_type="raw", prefix=prefix)
+        for obj in raw_response.get("resources", []):
+            public_id = obj["public_id"]
+            filename = public_id[len(prefix):]
             if filename:
-                files.append({"filename": filename, "key": key, "size": obj["Size"], "last_modified": obj["LastModified"].isoformat()})
+                files.append({"filename": filename, "key": public_id, "size": obj.get("bytes", 0), "last_modified": obj.get("created_at", "")})
+                
+        # Get image files
+        img_response = cloudinary.api.resources(type="upload", resource_type="image", prefix=prefix)
+        for obj in img_response.get("resources", []):
+            public_id = obj["public_id"]
+            filename = public_id[len(prefix):]
+            if filename:
+                files.append({"filename": filename, "key": public_id, "size": obj.get("bytes", 0), "last_modified": obj.get("created_at", "")})
+                
         return {"files": files}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing files: {str(e)}")
 
 @app.delete("/files/{filename}")
 def delete_file(filename: str, current_user: str = Depends(get_current_user)):
-    if not S3_BUCKET:
-        raise HTTPException(status_code=500, detail="S3 bucket not configured.")
     try:
-        s3_key = f"{current_user}/{filename}"
-        
-        # Verify if the file exists in S3 before attempting delete
-        try:
-            s3.head_object(Bucket=S3_BUCKET, Key=s3_key)
-        except Exception:
-            raise HTTPException(status_code=404, detail="File not found")
+        ext = os.path.splitext(filename)[1].lower()
+        res_type = "image" if ext in IMAGE_EXTENSIONS else "raw"
+        public_id = f"InsightAIFiles/{current_user}/{filename}"
             
-        s3.delete_object(Bucket=S3_BUCKET, Key=s3_key)
-        
+        result = cloudinary.uploader.destroy(public_id, resource_type=res_type)
+        if result.get("result") != "ok":
+            # Fallback for images without extension
+            result2 = cloudinary.uploader.destroy(f"{current_user}/{os.path.splitext(filename)[0]}", resource_type=res_type)
+            if result2.get("result") != "ok":
+                raise HTTPException(status_code=404, detail="File not found")
+            
         # If deleted file was the active file, clear active file and vector store
         if app.state.active_file == filename:
             app.state.active_file = None
@@ -535,18 +563,32 @@ class SelectFileRequest(BaseModel):
 def select_file(req: SelectFileRequest, current_user: str = Depends(get_current_user)):
     if embeddings is None:
         raise HTTPException(status_code=500, detail="Gemini clients not initialized properly.")
-    if not S3_BUCKET:
-        raise HTTPException(status_code=500, detail="S3 bucket not configured.")
     try:
         ext = os.path.splitext(req.filename)[1].lower()
-        s3_key = f"{current_user}/{req.filename}"
+        res_type = "image" if ext in IMAGE_EXTENSIONS else "raw"
+        public_id = f"InsightAIFiles/{current_user}/{req.filename}"
+        
+        url, _ = cloudinary.utils.cloudinary_url(public_id, resource_type=res_type)
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp_file:
-            s3.download_fileobj(S3_BUCKET, s3_key, tmp_file)
+            response = requests.get(url)
+            if response.status_code != 200:
+                if res_type == "image":
+                    url2, _ = cloudinary.utils.cloudinary_url(f"{current_user}/{os.path.splitext(req.filename)[0]}", resource_type=res_type)
+                    response = requests.get(url2)
+                
+                if response.status_code != 200:
+                    raise HTTPException(status_code=404, detail="File not found in storage")
+                    
+            tmp_file.write(response.content)
             tmp_file_path = tmp_file.name
+            
         chunks = process_file_to_vectorstore(tmp_file_path, req.filename)
         os.remove(tmp_file_path)
         app.state.active_file = req.filename
         return {"message": f"{req.filename} loaded successfully", "chunks": chunks, "filename": req.filename}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error loading file: {str(e)}")
 

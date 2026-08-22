@@ -207,7 +207,10 @@ export default function LoginRegister({
           disabled={authLoading}
           className="mt-2 p-3.5 rounded-sm border-none bg-gradient-to-r from-primary to-accent-blue text-white text-[0.95rem] font-semibold cursor-pointer flex justify-center items-center gap-2 transition-all duration-250 ease-in-out font-inherit tracking-[0.3px] shadow-[0_4px_12px_rgba(79,70,229,0.25)] hover:opacity-95 hover:-translate-y-0.5 hover:shadow-[0_6px_16px_rgba(79,70,229,0.35)] active:translate-y-0 disabled:bg-bg-tertiary disabled:text-text-muted disabled:cursor-not-allowed disabled:shadow-none disabled:opacity-60"
         >
-          {authLoading ? <Loader2 className="animate-spin-custom" size={18} /> : (isLoginMode ? "Sign In" : "Create Account")}
+          {authLoading ? <div className="flex justify-center items-center gap-2">
+            <Loader2 className="animate-spin-custom text-white" size={18} /> 
+            <p className="text-white">{isLoginMode ? "Signing in..." : "Creating account..."}</p>
+            </div>: (isLoginMode ? "Sign In" : "Create Account")}
         </button>
       </form>
 

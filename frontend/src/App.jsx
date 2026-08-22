@@ -67,17 +67,13 @@ function AppRoutes() {
         return;
       }
       setFile(selectedFile);
-      dispatch(showToast({ message: `Selected file: ${selectedFile.name}`, type: "info" }));
+      dispatch(showToast({ message: `Uploading ${selectedFile.name}...`, type: "info" }));
+      dispatch(uploadFile(selectedFile)).then((actionResult) => {
+        if (uploadFile.fulfilled.match(actionResult)) {
+          setFile(null);
+        }
+      });
     }
-  };
-
-  const handleUpload = () => {
-    if (!file) return;
-    dispatch(uploadFile(file)).then((actionResult) => {
-      if (uploadFile.fulfilled.match(actionResult)) {
-        setFile(null);
-      }
-    });
   };
 
   const handleSelectFile = (filename) => {
@@ -165,7 +161,6 @@ function AppRoutes() {
                   userFiles={userFiles}
                   activeFile={activeFile}
                   onFileChange={handleFileChange}
-                  onUpload={handleUpload}
                   onSelectFile={handleSelectFile}
                   onDeleteFile={handleDeleteFile}
                   onLogout={handleLogout}

@@ -8,7 +8,9 @@ faiss-cpu
 pypdf
 python-dotenv
 pydantic
-boto3
+pymongo
+cloudinary
+requests
 passlib
 bcrypt
 pyjwt
@@ -17,4 +19,3 @@ python-docx
 python-pptx
 openpyxl
 pillow
- 
