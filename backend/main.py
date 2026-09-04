@@ -64,17 +64,17 @@ ALGORITHM = "HS256"
 
 # MongoDB setup. Vercel environment variables must be configured in the
 # project settings because backend/.env is intentionally not deployed.
-MONGO_URI = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI")
-MONGO_DB = os.getenv("MONGODB_DB_NAME") or os.getenv("MONGODB_DATABASE")
-MONGO_COLLECTION = os.getenv("MONGODB_COLLECTION_NAME") or os.getenv("MONGODB_COLLECTION")
+MONGODB_URI = os.getenv("MONGODB_URI") 
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME") 
+MONGODB_COLLECTION_NAME = os.getenv("MONGODB_COLLECTION_NAME")
 
 db = None
 mongo_config_error = None
 missing_mongo_variables = [
     name for name, value in (
-        ("MONGODB_URI", MONGO_URI),
-        ("MONGODB_DB_NAME", MONGO_DB),
-        ("MONGODB_COLLECTION_NAME", MONGO_COLLECTION),
+        ("MONGODB_URI"),
+        ("MONGODB_DB_NAME"),
+        ("MONGODB_COLLECTION_NAME"),
     )
     if not value
 ]
@@ -87,8 +87,8 @@ if missing_mongo_variables:
     print(mongo_config_error)
 else:
     try:
-        mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-        db = mongo_client[MONGO_DB]
+        mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+        db = mongo_client[MONGODB_DB_NAME]
     except Exception as e:
         mongo_config_error = f"MongoDB connection error: {e}"
         print(mongo_config_error)
@@ -97,7 +97,7 @@ def get_users_collection():
     if db is None:
         detail = mongo_config_error or "MongoDB connection is unavailable."
         raise HTTPException(status_code=500, detail=detail)
-    return db[MONGO_COLLECTION]
+    return db[MONGODB_COLLECTION_NAME]
 
 # Cloudinary setup
 cloudinary.config( 
