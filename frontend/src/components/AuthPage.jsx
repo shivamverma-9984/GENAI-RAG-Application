@@ -6,9 +6,10 @@ import LoginRegister, { getPasswordStrength } from "./LoginRegister";
 import ForgotPassword from "./ForgotPassword";
 import VerifyEmail from "./VerifyEmail";
 
-const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-  ? "http://localhost:8000"
-  : "https://genai-rag-application-4aag.vercel.app";
+const API_BASE_URL = "https://genai-rag-application-4aag.vercel.app";
+// const API_BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+//   ? "http://localhost:8000"
+//   : "https://genai-rag-application-4aag.vercel.app";
 
 function AuthPage({ onLoginSuccess, mode }) {
   const navigate = useNavigate();
