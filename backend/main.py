@@ -62,21 +62,41 @@ app.add_middleware(
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
 
-# MongoDB setup
-MONGO_URI = os.getenv("MONGODB_URI")
-MONGO_DB = os.getenv("MONGODB_DB_NAME")
-MONGO_COLLECTION = os.getenv("MONGODB_COLLECTION_NAME")
+# MongoDB setup. Vercel environment variables must be configured in the
+# project settings because backend/.env is intentionally not deployed.
+MONGO_URI = os.getenv("MONGODB_URI") or os.getenv("MONGO_URI")
+MONGO_DB = os.getenv("MONGODB_DB_NAME") or os.getenv("MONGODB_DATABASE")
+MONGO_COLLECTION = os.getenv("MONGODB_COLLECTION_NAME") or os.getenv("MONGODB_COLLECTION")
 
 db = None
-try:
-    mongo_client = MongoClient(MONGO_URI)
-    db = mongo_client[MONGO_DB]
-except Exception as e:
-    print(f"MongoDB connection error: {e}")
+mongo_config_error = None
+missing_mongo_variables = [
+    name for name, value in (
+        ("MONGODB_URI", MONGO_URI),
+        ("MONGODB_DB_NAME", MONGO_DB),
+        ("MONGODB_COLLECTION_NAME", MONGO_COLLECTION),
+    )
+    if not value
+]
+
+if missing_mongo_variables:
+    mongo_config_error = (
+        "Missing MongoDB environment variable(s): "
+        + ", ".join(missing_mongo_variables)
+    )
+    print(mongo_config_error)
+else:
+    try:
+        mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+        db = mongo_client[MONGO_DB]
+    except Exception as e:
+        mongo_config_error = f"MongoDB connection error: {e}"
+        print(mongo_config_error)
 
 def get_users_collection():
     if db is None:
-        raise HTTPException(status_code=500, detail="Database connection not initialized. Please check MongoDB configuration.")
+        detail = mongo_config_error or "MongoDB connection is unavailable."
+        raise HTTPException(status_code=500, detail=detail)
     return db[MONGO_COLLECTION]
 
 # Cloudinary setup
@@ -639,4 +659,3 @@ def read_root():
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
