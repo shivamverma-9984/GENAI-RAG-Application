@@ -72,9 +72,9 @@ db = None
 mongo_config_error = None
 missing_mongo_variables = [
     name for name, value in (
-        ("MONGODB_URI"),
-        ("MONGODB_DB_NAME"),
-        ("MONGODB_COLLECTION_NAME"),
+        ("MONGODB_URI", MONGODB_URI),
+        ("MONGODB_DB_NAME", MONGODB_DB_NAME),
+        ("MONGODB_COLLECTION_NAME", MONGODB_COLLECTION_NAME),
     )
     if not value
 ]
