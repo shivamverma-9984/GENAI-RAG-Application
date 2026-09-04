@@ -117,7 +117,7 @@ export default function LoginRegister({
               placeholder="Your display name"
               value={authForm.username}
               onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
-              className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none transition-all duration-250 ease-in-out placeholder:text-text-muted focus:border-primary focus:bg-primary/5 focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+              className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none transition-all"
             />
           </div>
         )}
@@ -131,7 +131,7 @@ export default function LoginRegister({
             placeholder="you@example.com"
             value={authForm.email}
             onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
-            className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none transition-all duration-250 ease-in-out placeholder:text-text-muted focus:border-primary focus:bg-primary/5 focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+            className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none "
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -154,7 +154,7 @@ export default function LoginRegister({
             placeholder="••••••••"
             value={authForm.password}
             onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
-            className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none transition-all duration-250 ease-in-out placeholder:text-text-muted focus:border-primary focus:bg-primary/5 focus:shadow-[0_0_0_3px_rgba(79,70,229,0.15)]"
+            className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none"
           />
           {!isLoginMode && authForm.password && (
             <div className="flex flex-col gap-2.5 mt-2.5 p-3.5 rounded-sm bg-[#090f1e]/80 border border-border-color transition-all duration-300">
