@@ -37,7 +37,7 @@ export const uploadFile = createAsyncThunk(
           Authorization: `Bearer ${auth.token}`
         },
       });
-      dispatch(showToast({ message: `Successfully processed ${res.data.filename}!`, type: "success" }));
+      // dispatch(showToast({ message: `Successfully processed ${res.data.filename}!`, type: "success" }));
       dispatch(fetchUserFiles());
       return res.data;
     } catch (err) {

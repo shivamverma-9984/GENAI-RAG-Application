@@ -42,6 +42,9 @@ function Sidebar({
     }
   };
 
+  console.log("->>>>",uploadStatus.message);
+  
+
   return (
     <aside className={`w-[280px] h-screen shrink-0 bg-bg-secondary border-r border-border-color flex flex-col p-[24px_20px] gap-4 relative z-1000 transition-all duration-250 ease-in-out max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:w-[290px] max-lg:shadow-lg max-lg:-translate-x-full ${
       isOpenMobile ? "max-lg:translate-x-0" : ""
@@ -101,14 +104,14 @@ function Sidebar({
       <input
         id="file-upload"
         type="file"
-        accept=".pdf,.docx,.pptx,.txt,.csv,.xlsx,.png,.jpg,.jpeg,.webp"
+        accept=".pdf,.docx,.pptx,.txt,.csv,.xlsx,"
         onChange={onFileChange}
         style={{ display: "none" }}
       />
 
 
 
-      {uploadStatus.message && (
+      {/* {uploadStatus.message && (
         <div className={`p-[10px_14px] rounded-xs text-[0.78rem] font-medium text-center mt-1 border-l-3 leading-normal border ${
           uploadStatus.type === "success"
             ? "bg-success-light text-success-text border-success-border border-l-success"
@@ -116,7 +119,7 @@ function Sidebar({
         }`}>
           {uploadStatus.message}
         </div>
-      )}
+      )} */}
 
       <div className="text-[0.72rem] font-extrabold uppercase tracking-wider text-text-muted px-1 mt-2">
         Your Documents
@@ -185,7 +188,8 @@ function Sidebar({
       {fileToDelete && (
         <div className="absolute bottom-4 left-4 right-4 bg-bg-card border border-error/30 shadow-[0_8px_30px_rgba(0,0,0,0.5)] rounded-md p-4 z-50 animate-toast-slide-in backdrop-blur-xl">
           <p className="text-sm font-medium text-text-primary mb-3 leading-snug">
-            Are you sure you want to delete "{fileToDelete}"?
+            {/* Are you sure you want to delete "{fileToDelete}"? */}
+            Are you sure you want to delete "?
           </p>
           <div className="flex justify-end gap-2">
             <button 

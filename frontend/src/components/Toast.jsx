@@ -22,7 +22,7 @@ const PROGRESS_COLORS = {
   info: "bg-info",
 };
 
-function ToastItem({ id, message, type, duration = 4000, onClose }) {
+function ToastItem({ id, message, type, duration = 1000, onClose }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       onClose(id);

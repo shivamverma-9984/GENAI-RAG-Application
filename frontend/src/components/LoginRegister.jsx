@@ -1,4 +1,5 @@
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 // Helper to determine password strength
@@ -49,6 +50,7 @@ export default function LoginRegister({
   showVerifyLink,
   onVerifyClick
 }) {
+    const [showPassword, setShowPassword] = useState(false);
   const strength = getPasswordStrength(authForm.password);
   return (
     <>
@@ -105,7 +107,7 @@ export default function LoginRegister({
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      <form onSubmit={onSubmit} className="flex flex-col gap-3">
         {!isLoginMode && (
           <div className="flex flex-col gap-2">
             <label className="text-[0.75rem] font-bold text-text-secondary uppercase tracking-[0.8px]">
@@ -114,10 +116,10 @@ export default function LoginRegister({
             <input
               type="text"
               required
-              placeholder="Your display name"
+              placeholder="Enter your name"
               value={authForm.username}
               onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
-              className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none transition-all"
+              className="placeholder-text-muted w-full p-[12px_16px] border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none transition-all"
             />
           </div>
         )}
@@ -128,10 +130,10 @@ export default function LoginRegister({
           <input
             type="email"
             required
-            placeholder="you@example.com"
+            placeholder="Enter your email"
             value={authForm.email}
             onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
-            className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none "
+            className="placeholder-text-muted w-full p-[12px_16px]  border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none "
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -148,14 +150,26 @@ export default function LoginRegister({
               </Link>
             )}
           </div>
-          <input
-            type="password"
-            required
-            placeholder="••••••••"
-            value={authForm.password}
-            onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
-            className="w-full p-[12px_16px] rounded-sm border border-border-color bg-bg-input text-text-primary text-[0.95rem] font-inherit outline-none"
-          />
+            <div className="relative w-full">
+      <input
+        type={showPassword ? "text" : "password"}
+        required
+        placeholder="Enter your password"
+        value={authForm.password}
+        onChange={(e) =>
+          setAuthForm({ ...authForm, password: e.target.value })
+        }
+        className="placeholder-text-muted w-full p-[12px_16px] border border-border-color bg-bg-input text-text-primary text-[0.95rem]  outline-none"
+      />
+      <button
+        type="button"
+        onClick={() => setShowPassword(!showPassword)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-text-primary"
+      >
+        {showPassword ? <EyeOff size={20} className="text-gray-500" /> : <Eye size={20} className="text-gray-500" />}
+      </button>
+    </div>
+         
           {!isLoginMode && authForm.password && (
             <div className="flex flex-col gap-2.5 mt-2.5 p-3.5 rounded-sm bg-[#090f1e]/80 border border-border-color transition-all duration-300">
               <div className="flex justify-between items-center text-[0.72rem] font-bold">
