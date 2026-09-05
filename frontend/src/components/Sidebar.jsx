@@ -42,9 +42,6 @@ function Sidebar({
     }
   };
 
-  console.log("->>>>",uploadStatus.message);
-  
-
   return (
     <aside className={`w-[280px] h-screen shrink-0 bg-bg-secondary border-r border-border-color flex flex-col p-[24px_20px] gap-4 relative z-1000 transition-all duration-250 ease-in-out max-lg:fixed max-lg:top-0 max-lg:bottom-0 max-lg:left-0 max-lg:w-[290px] max-lg:shadow-lg max-lg:-translate-x-full ${
       isOpenMobile ? "max-lg:translate-x-0" : ""
@@ -70,7 +67,7 @@ function Sidebar({
           {username.charAt(0).toUpperCase()}
         </div>
         <div className="flex flex-col overflow-hidden">
-          <div className="text-sm font-semibold text-text-primary truncate">{username}</div>
+          <div className="text-sm font-semibold text-text-primary truncate">{username.split(" ")[0]}</div>
           {/* <div className="text-[0.72rem] font-medium text-text-secondary opacity-70">Pro User</div> */}
         </div>
       </div>
@@ -189,7 +186,7 @@ function Sidebar({
         <div className="absolute bottom-4 left-4 right-4 bg-bg-card border border-error/30 shadow-[0_8px_30px_rgba(0,0,0,0.5)] rounded-md p-4 z-50 animate-toast-slide-in backdrop-blur-xl">
           <p className="text-sm font-medium text-text-primary mb-3 leading-snug">
             {/* Are you sure you want to delete "{fileToDelete}"? */}
-            Are you sure you want to delete "?
+            Are you sure you want to delete ?
           </p>
           <div className="flex justify-end gap-2">
             <button 
